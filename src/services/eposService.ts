@@ -1,5 +1,25 @@
 import axios, { AxiosInstance } from 'axios';
-import { getSetting } from '@/lib/db';
+import { getSetting, getWooStore } from '@/lib/db';
+
+/**
+ * Resolve ePOS credentials for a store.
+ * Priority: per-store credentials → global settings fallback.
+ */
+async function resolveCredentials(storeId?: number): Promise<{ appId: string; appSecret: string }> {
+  if (storeId) {
+    const store = await getWooStore(storeId);
+    if (store?.epos_app_id && store?.epos_app_secret) {
+      return { appId: store.epos_app_id, appSecret: store.epos_app_secret };
+    }
+  }
+  // Fallback to global settings
+  const appId = await getSetting('epos_app_id');
+  const appSecret = await getSetting('epos_app_secret');
+  if (!appId || !appSecret) {
+    throw new Error('ePOS Now credentials not configured. Please add ePOS API credentials to your store in Settings.');
+  }
+  return { appId, appSecret };
+}
 
 export interface EposProduct {
   Id: number;
@@ -37,14 +57,8 @@ export interface EposTransactionLine {
   UnitPrice: number;
 }
 
-function buildClient(): AxiosInstance {
-  const appId = getSetting('epos_app_id');
-  const appSecret = getSetting('epos_app_secret');
-
-  if (!appId || !appSecret) {
-    throw new Error('ePOS Now credentials not configured. Please visit Settings.');
-  }
-
+async function buildClient(storeId?: number): Promise<AxiosInstance> {
+  const { appId, appSecret } = await resolveCredentials(storeId);
   const token = Buffer.from(`${appId}:${appSecret}`).toString('base64');
 
   return axios.create({
@@ -57,8 +71,8 @@ function buildClient(): AxiosInstance {
   });
 }
 
-async function getAllPages<T>(path: string): Promise<T[]> {
-  const client = buildClient();
+async function getAllPages<T>(path: string, storeId?: number): Promise<T[]> {
+  const client = await buildClient(storeId);
   const results: T[] = [];
   let page = 1;
 
@@ -74,56 +88,213 @@ async function getAllPages<T>(path: string): Promise<T[]> {
   return results;
 }
 
-export async function getEposProducts(): Promise<EposProduct[]> {
-  return getAllPages<EposProduct>('/api/V4/Product');
+export async function getEposProducts(storeId?: number): Promise<EposProduct[]> {
+  return getAllPages<EposProduct>('/api/V4/Product', storeId);
 }
 
-export async function getEposProduct(id: number): Promise<EposProduct> {
-  const client = buildClient();
+export async function getEposProduct(id: number, storeId?: number): Promise<EposProduct> {
+  const client = await buildClient(storeId);
   const res = await client.get<EposProduct>(`/api/V4/Product/${id}`);
   return res.data;
 }
 
-export async function createEposProduct(product: Partial<EposProduct>): Promise<EposProduct> {
-  const client = buildClient();
+export async function createEposProduct(product: Partial<EposProduct>, storeId?: number): Promise<EposProduct> {
+  const client = await buildClient(storeId);
   const res = await client.post<EposProduct>('/api/V4/Product', product);
   return res.data;
 }
 
 export async function updateEposProduct(
   id: number,
-  product: Partial<EposProduct>
+  product: Partial<EposProduct>,
+  storeId?: number
 ): Promise<EposProduct> {
-  const client = buildClient();
+  const client = await buildClient(storeId);
   const res = await client.put<EposProduct>(`/api/V4/Product/${id}`, product);
   return res.data;
 }
 
-export async function getEposProductStocks(): Promise<EposProductStock[]> {
-  return getAllPages<EposProductStock>('/api/V4/ProductStock');
+export async function getEposProductStocks(storeId?: number): Promise<EposProductStock[]> {
+  return getAllPages<EposProductStock>('/api/V4/ProductStock', storeId);
 }
 
 export async function updateEposProductStock(
   id: number,
-  stock: Partial<EposProductStock>
+  stock: Partial<EposProductStock>,
+  storeId?: number
 ): Promise<EposProductStock> {
-  const client = buildClient();
+  const client = await buildClient(storeId);
   const res = await client.put<EposProductStock>(`/api/V4/ProductStock/${id}`, stock);
   return res.data;
 }
 
-export async function getEposTransactions(page = 1): Promise<EposTransaction[]> {
-  const client = buildClient();
+export async function getEposTransactions(page = 1, storeId?: number): Promise<EposTransaction[]> {
+  const client = await buildClient(storeId);
   const res = await client.get<EposTransaction[]>(`/api/V4/Transaction?page=${page}`);
   return res.data;
 }
 
-export async function testEposConnection(): Promise<boolean> {
+export async function testEposConnection(storeId?: number): Promise<boolean> {
   try {
-    const client = buildClient();
+    const client = await buildClient(storeId);
     await client.get('/api/V4/Product?page=1');
     return true;
   } catch {
     return false;
   }
+}
+
+/* ---------- Categories ---------- */
+
+export interface EposCategory {
+  Id: number;
+  Name: string;
+  ParentId?: number | null;
+}
+
+export async function getEposCategories(storeId?: number): Promise<EposCategory[]> {
+  return getAllPages<EposCategory>('/api/V4/Category', storeId);
+}
+
+/* ---------- Customers ---------- */
+
+export interface EposCustomer {
+  Id: number;
+  FirstName: string;
+  LastName: string;
+  Email?: string;
+  Phone?: string;
+  Company?: string;
+}
+
+export async function getEposCustomers(storeId?: number): Promise<EposCustomer[]> {
+  return getAllPages<EposCustomer>('/api/V4/Customer', storeId);
+}
+
+/* ---------- Customer CRUD ---------- */
+
+export async function createEposCustomer(customer: Partial<EposCustomer>, storeId?: number): Promise<EposCustomer> {
+  const client = await buildClient(storeId);
+  const res = await client.post<EposCustomer>('/api/V4/Customer', customer);
+  return res.data;
+}
+
+/* ---------- Locations ---------- */
+
+export interface EposLocation {
+  Id: number;
+  Name: string;
+  AddressLine1?: string;
+  AddressLine2?: string;
+  City?: string;
+  County?: string;
+  PostCode?: string;
+  Country?: string;
+}
+
+export async function getEposLocations(storeId?: number): Promise<EposLocation[]> {
+  return getAllPages<EposLocation>('/api/V4/Location', storeId);
+}
+
+/* ---------- Tax Rates ---------- */
+
+export interface EposTaxRate {
+  Id: number;
+  Name: string;
+  Percentage: number;
+}
+
+export async function getEposTaxRates(storeId?: number): Promise<EposTaxRate[]> {
+  return getAllPages<EposTaxRate>('/api/V4/TaxRate', storeId);
+}
+
+export async function createEposTaxRate(name: string, percentage: number, storeId?: number): Promise<EposTaxRate> {
+  const client = await buildClient(storeId);
+  const res = await client.post<EposTaxRate>('/api/V4/TaxRate', { Name: name, Percentage: percentage });
+  return res.data;
+}
+
+/* ---------- Tender Types ---------- */
+
+export interface EposTenderType {
+  Id: number;
+  Name: string;
+}
+
+export async function getEposTenderTypes(storeId?: number): Promise<EposTenderType[]> {
+  return getAllPages<EposTenderType>('/api/V4/TenderType', storeId);
+}
+
+/* ---------- Transactions (Create) ---------- */
+
+export interface CreateTransactionLine {
+  ProductId: number;
+  Quantity: number;
+  UnitPrice: number;
+  TaxRateId?: number;
+  Note?: string;
+}
+
+export interface CreateTransactionPayload {
+  DeviceName?: string;
+  StaffMemberId?: number;
+  CustomerId?: number;
+  LocationId?: number;
+  TransactionLines: CreateTransactionLine[];
+  TenderTypeId?: number;
+  TenderAmount?: number;
+  Note?: string;
+}
+
+export async function createEposTransaction(payload: CreateTransactionPayload, storeId?: number): Promise<EposTransaction> {
+  const client = await buildClient(storeId);
+  const res = await client.post<EposTransaction>('/api/V4/Transaction', payload);
+  return res.data;
+}
+
+/* ---------- Refunds ---------- */
+
+export async function createEposRefund(payload: CreateTransactionPayload, storeId?: number): Promise<EposTransaction> {
+  const client = await buildClient(storeId);
+  // Refunds use negative quantities
+  const refundPayload = {
+    ...payload,
+    TransactionLines: payload.TransactionLines.map((line) => ({
+      ...line,
+      Quantity: -Math.abs(line.Quantity),
+    })),
+  };
+  const res = await client.post<EposTransaction>('/api/V4/Transaction', refundPayload);
+  return res.data;
+}
+
+/* ---------- Webhooks ---------- */
+
+export interface EposWebhook {
+  Id?: number;
+  EventType: number;
+  Uri: string;
+  Enabled?: boolean;
+}
+
+export async function getEposWebhooks(storeId?: number): Promise<EposWebhook[]> {
+  const client = await buildClient(storeId);
+  const res = await client.get<EposWebhook[]>('/api/v4/Webhook');
+  return Array.isArray(res.data) ? res.data : [];
+}
+
+export async function subscribeEposWebhook(eventType: number, uri: string, storeId?: number): Promise<EposWebhook> {
+  const client = await buildClient(storeId);
+  const res = await client.post<EposWebhook>('/api/v4/Webhook', { EventType: eventType, Uri: uri });
+  return res.data;
+}
+
+export async function unsubscribeEposWebhook(webhookId: number, storeId?: number): Promise<void> {
+  const client = await buildClient(storeId);
+  await client.delete(`/api/v4/Webhook/${webhookId}`);
+}
+
+export async function updateEposWebhookBaseUrl(baseUrl: string, storeId?: number): Promise<void> {
+  const client = await buildClient(storeId);
+  await client.patch('/api/v4/Webhook', { BaseUri: baseUrl });
 }

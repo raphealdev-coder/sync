@@ -7,18 +7,22 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const storeId = searchParams.get('store_id');
 
-  const epos = await testEposConnection();
-
   if (storeId) {
+    const epos = await testEposConnection(Number(storeId));
     const woo = await testWooConnection(Number(storeId));
-    return NextResponse.json({ epos, woo });
+    return NextResponse.json({ wooStores: { [storeId]: { epos, woo } } });
   }
 
   // Test all stores
-  const stores = getWooStores();
-  const wooResults: Record<number, boolean> = {};
+  const stores = await getWooStores();
+  const wooStores: Record<number, { epos: boolean; woo: boolean }> = {};
   for (const store of stores) {
-    wooResults[store.id] = await testWooConnection(store.id);
+    let epos = false;
+    if (store.epos_app_id) {
+      try { epos = await testEposConnection(store.id); } catch { /* no creds */ }
+    }
+    const woo = await testWooConnection(store.id);
+    wooStores[store.id] = { epos, woo };
   }
-  return NextResponse.json({ epos, wooStores: wooResults });
+  return NextResponse.json({ wooStores });
 }

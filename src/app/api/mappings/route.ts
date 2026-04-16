@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getProductMappings, upsertProductMapping, deleteProductMapping, addLog } from '@/lib/db';
+import { getProductMappings, upsertProductMapping, deleteProductMapping, setIgnoreStockUpdate, addLog } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const storeId = searchParams.get('store_id');
-  const mappings = storeId ? getProductMappings(Number(storeId)) : getProductMappings();
+  const mappings = storeId ? await getProductMappings(Number(storeId)) : await getProductMappings();
   return NextResponse.json({ mappings });
 }
 
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'store_id is required' }, { status: 400 });
     }
 
-    upsertProductMapping(
+    await upsertProductMapping(
       Number(store_id),
       String(epos_id),
       Number(woo_id),
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
       String(woo_name ?? '')
     );
 
-    addLog(
+    await addLog(
       'manual-link',
       'success',
       `Manually linked ePOS "${epos_name ?? epos_id}" → WooCommerce "${woo_name ?? woo_id}"`
@@ -54,8 +54,27 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'id is required' }, { status: 400 });
     }
 
-    deleteProductMapping(Number(id));
-    addLog('manual-link', 'info', `Removed product mapping #${id}`);
+    await deleteProductMapping(Number(id));
+    await addLog('manual-link', 'info', `Removed product mapping #${id}`);
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { id, ignore_stock_update } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: 'id is required' }, { status: 400 });
+    }
+
+    if (typeof ignore_stock_update === 'boolean') {
+      await setIgnoreStockUpdate(Number(id), ignore_stock_update);
+    }
 
     return NextResponse.json({ success: true });
   } catch (err) {

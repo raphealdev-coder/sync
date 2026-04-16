@@ -4,15 +4,31 @@ import { getSetting, setSetting } from '@/lib/db';
 const SETTING_KEYS = [
   'epos_app_id',
   'epos_app_secret',
+  // Sync direction / master settings
+  'stock_master',
+  'product_master',
+  // Customer sync
+  'customer_sync_enabled',
+  'default_sync_customer_id',
+  // Location
+  'epos_location_id',
+  // Product sync
+  'product_match_field',
+  'product_delete_action',
+  'product_default_status',
+  'price_sync_enabled',
+  // Transaction
+  'transaction_details_enabled',
 ];
+
+const SECRET_KEYS = ['epos_app_secret'];
 
 export async function GET() {
   const settings: Record<string, string> = {};
   for (const key of SETTING_KEYS) {
-    const val = getSetting(key);
+    const val = await getSetting(key);
     if (val) {
-      // Mask secrets: show only fixed "••••••••" + last 4 characters
-      if (key.includes('secret') || key.includes('key')) {
+      if (SECRET_KEYS.includes(key)) {
         settings[key] = '••••••••' + val.slice(-4);
       } else {
         settings[key] = val;
@@ -31,7 +47,7 @@ export async function POST(req: NextRequest) {
         // Skip if value looks like a masked placeholder
         if (value.includes('••••')) continue;
         if (value) {
-          setSetting(key, value);
+          await setSetting(key, value);
         }
       }
     }

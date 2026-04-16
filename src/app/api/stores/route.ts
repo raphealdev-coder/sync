@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getWooStores, createWooStore, updateWooStore, deleteWooStore, getWooStore } from '@/lib/db';
 
 export async function GET() {
-  const stores = getWooStores();
+  const stores = await getWooStores();
   // Mask secrets
   const masked = stores.map((s) => ({
     ...s,
     consumer_key: '••••••••' + s.consumer_key.slice(-4),
     consumer_secret: '••••••••' + s.consumer_secret.slice(-4),
+    epos_app_id: s.epos_app_id ?? '',
+    epos_app_secret: s.epos_app_secret ? '••••••••' + s.epos_app_secret.slice(-4) : '',
+    epos_location_id: s.epos_location_id ?? '',
+    bmls_location_id: s.bmls_location_id ?? '',
   }));
   return NextResponse.json({ stores: masked });
 }
@@ -15,7 +19,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { id, name, site_url, consumer_key, consumer_secret } = body;
+    const { id, name, site_url, consumer_key, consumer_secret, epos_app_id, epos_app_secret, epos_location_id, bmls_location_id } = body;
 
     if (!name || !site_url || !consumer_key || !consumer_secret) {
       return NextResponse.json(
@@ -26,23 +30,41 @@ export async function POST(req: NextRequest) {
 
     if (id) {
       // Update existing store - skip masked values
-      const existing = getWooStore(Number(id));
+      const existing = await getWooStore(Number(id));
       if (!existing) {
         return NextResponse.json({ error: 'Store not found' }, { status: 404 });
       }
       const finalKey = consumer_key.includes('••••') ? existing.consumer_key : String(consumer_key).trim();
       const finalSecret = consumer_secret.includes('••••') ? existing.consumer_secret : String(consumer_secret).trim();
-      updateWooStore(Number(id), String(name).trim(), String(site_url).trim(), finalKey, finalSecret);
+      const finalEposId = epos_app_id !== undefined ? String(epos_app_id).trim() || undefined : existing.epos_app_id ?? undefined;
+      const finalEposSecret = epos_app_secret && !epos_app_secret.includes('••••')
+        ? String(epos_app_secret).trim()
+        : existing.epos_app_secret ?? undefined;
+      const finalEposLocation = epos_location_id !== undefined ? String(epos_location_id).trim() || undefined : existing.epos_location_id ?? undefined;
+      const finalBmlsLocation = bmls_location_id !== undefined ? String(bmls_location_id).trim() || undefined : existing.bmls_location_id ?? undefined;
+      await updateWooStore(Number(id), String(name).trim(), String(site_url).trim(), finalKey, finalSecret, finalEposId, finalEposSecret, finalEposLocation, finalBmlsLocation);
       return NextResponse.json({ success: true });
     } else {
       // Create new store
-      const store = createWooStore(
+      const store = await createWooStore(
         String(name).trim(),
         String(site_url).trim(),
         String(consumer_key).trim(),
-        String(consumer_secret).trim()
+        String(consumer_secret).trim(),
+        epos_app_id ? String(epos_app_id).trim() : undefined,
+        epos_app_secret ? String(epos_app_secret).trim() : undefined,
+        epos_location_id ? String(epos_location_id).trim() : undefined,
+        bmls_location_id ? String(bmls_location_id).trim() : undefined
       );
-      return NextResponse.json({ success: true, store: { ...store, consumer_key: '••••••••' + store.consumer_key.slice(-4), consumer_secret: '••••••••' + store.consumer_secret.slice(-4) } });
+      return NextResponse.json({
+        success: true,
+        store: {
+          ...store,
+          consumer_key: '••••••••' + store.consumer_key.slice(-4),
+          consumer_secret: '••••••••' + store.consumer_secret.slice(-4),
+          epos_app_secret: store.epos_app_secret ? '••••••••' + store.epos_app_secret.slice(-4) : '',
+        },
+      });
     }
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
@@ -56,7 +78,7 @@ export async function DELETE(req: NextRequest) {
     if (!id) {
       return NextResponse.json({ error: 'id is required' }, { status: 400 });
     }
-    deleteWooStore(Number(id));
+    await deleteWooStore(Number(id));
     return NextResponse.json({ success: true });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });

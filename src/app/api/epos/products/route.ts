@@ -1,9 +1,10 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getEposProducts } from '@/services/eposService';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const products = await getEposProducts();
+    const storeId = Number(new URL(req.url).searchParams.get('store_id')) || undefined;
+    const products = await getEposProducts(storeId);
     // Filter out deleted products and return a clean shape
     const cleaned = products
       .filter((p) => !p.IsDeleted)

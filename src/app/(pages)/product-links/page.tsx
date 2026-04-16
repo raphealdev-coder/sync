@@ -10,6 +10,7 @@ import {
   PackageSearch,
   ArrowRight,
   X,
+  Wand2,
 } from 'lucide-react';
 import StoreSelector, { useStores } from '@/components/StoreSelector';
 
@@ -44,6 +45,7 @@ interface Mapping {
   epos_name: string | null;
   woo_name: string | null;
   last_synced: string | null;
+  ignore_stock_update: number;
 }
 
 /* ---------- helpers ---------- */
@@ -79,6 +81,7 @@ export default function ProductLinksPage() {
   const [selectedEpos, setSelectedEpos] = useState<EposProduct | null>(null);
   const [selectedWoo, setSelectedWoo] = useState<WooProduct | null>(null);
   const [linking, setLinking] = useState(false);
+  const [autoMatching, setAutoMatching] = useState(false);
 
   // derived lookups
   const mappedEposIds = useMemo(
@@ -175,6 +178,46 @@ export default function ProductLinksPage() {
     }
   };
 
+  const handleAutoMatch = async () => {
+    if (!selectedStoreId) return;
+    setAutoMatching(true);
+    setError('');
+    setSuccessMsg('');
+    try {
+      const res = await fetch('/api/sync/auto-match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ store_id: selectedStoreId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Failed');
+      setSuccessMsg(`Auto-match: ${data.result.matched} matched, ${data.result.unmatched} unmatched`);
+      fetchMappings();
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setAutoMatching(false);
+    }
+  };
+
+  const handleToggleIgnoreStock = async (mappingId: number, current: number) => {
+    try {
+      const res = await fetch('/api/mappings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: mappingId, ignore_stock_update: !current }),
+      });
+      if (!res.ok) throw new Error('Failed to update');
+      setMappings((prev) =>
+        prev.map((m) =>
+          m.id === mappingId ? { ...m, ignore_stock_update: current ? 0 : 1 } : m
+        )
+      );
+    } catch (err) {
+      setError(String(err));
+    }
+  };
+
   const handleUnlink = async (mappingId: number) => {
     try {
       setError('');
@@ -221,8 +264,16 @@ export default function ProductLinksPage() {
           Manually link ePOS Now products to WooCommerce products — useful when SKUs differ or
           for variant products sharing the same SKU.
         </p>
-        <div className="mt-3">
+        <div className="mt-3 flex items-center gap-3">
           <StoreSelector stores={stores} selectedStoreId={selectedStoreId} onChange={setSelectedStoreId} />
+          <button
+            onClick={handleAutoMatch}
+            disabled={!selectedStoreId || autoMatching}
+            className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-medium px-4 py-2 rounded-lg transition-colors text-sm"
+          >
+            <Wand2 className={`w-4 h-4 ${autoMatching ? 'animate-spin' : ''}`} />
+            {autoMatching ? 'Matching…' : 'Auto Match'}
+          </button>
         </div>
       </div>
 
@@ -592,6 +643,7 @@ export default function ProductLinksPage() {
                   <th className="px-6 py-3 text-center font-medium text-slate-500" />
                   <th className="px-6 py-3 text-left font-medium text-slate-500">WooCommerce</th>
                   <th className="px-6 py-3 text-left font-medium text-slate-500">Last Synced</th>
+                  <th className="px-6 py-3 text-center font-medium text-slate-500">Ignore Stock</th>
                   <th className="px-6 py-3 text-right font-medium text-slate-500">Action</th>
                 </tr>
               </thead>
@@ -611,6 +663,21 @@ export default function ProductLinksPage() {
                     </td>
                     <td className="px-6 py-3 text-slate-400 text-xs">
                       {m.last_synced ? new Date(m.last_synced).toLocaleString() : '—'}
+                    </td>
+                    <td className="px-6 py-3 text-center">
+                      <button
+                        onClick={() => handleToggleIgnoreStock(m.id, m.ignore_stock_update)}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                          m.ignore_stock_update ? 'bg-amber-500' : 'bg-slate-200'
+                        }`}
+                        title={m.ignore_stock_update ? 'Stock updates ignored' : 'Stock updates active'}
+                      >
+                        <span
+                          className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                            m.ignore_stock_update ? 'translate-x-4.5' : 'translate-x-0.5'
+                          }`}
+                        />
+                      </button>
                     </td>
                     <td className="px-6 py-3 text-right">
                       <button
