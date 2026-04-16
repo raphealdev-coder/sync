@@ -285,8 +285,20 @@ export async function getEposWebhooks(storeId?: number): Promise<EposWebhook[]> 
 
 export async function subscribeEposWebhook(eventType: number, uri: string, storeId?: number): Promise<EposWebhook> {
   const client = await buildClient(storeId);
-  const res = await client.post<EposWebhook>('/api/v4/Webhook', { EventType: eventType, Uri: uri });
-  return res.data;
+  try {
+    // Try v4 format first
+    const res = await client.post<EposWebhook>('/api/v4/Webhook', {
+      EventType: eventType,
+      Uri: uri,
+      ContentType: 'application/json',
+    });
+    return res.data;
+  } catch (err: unknown) {
+    // Extract detailed error from ePOS Now response
+    const axErr = err as { response?: { data?: unknown; status?: number } };
+    const detail = axErr.response?.data ? JSON.stringify(axErr.response.data) : '';
+    throw new Error(`ePOS webhook subscribe failed (${axErr.response?.status}): ${detail}`);
+  }
 }
 
 export async function unsubscribeEposWebhook(webhookId: number, storeId?: number): Promise<void> {
