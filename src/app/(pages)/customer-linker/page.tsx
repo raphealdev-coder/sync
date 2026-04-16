@@ -67,7 +67,7 @@ export default function CustomerLinkerPage() {
   const fetchEpos = async () => {
     setLoadingEpos(true);
     try {
-      const res = await fetch('/api/epos/customers');
+      const res = await fetch(`/api/epos/customers?store_id=${selectedStoreId}`);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setEposCustomers(data.customers ?? []);

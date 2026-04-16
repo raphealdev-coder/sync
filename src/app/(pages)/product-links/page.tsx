@@ -98,7 +98,7 @@ export default function ProductLinksPage() {
   const fetchEpos = async () => {
     setLoadingEpos(true);
     try {
-      const res = await fetch('/api/epos/products');
+      const res = await fetch(`/api/epos/products?store_id=${selectedStoreId}`);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setEposProducts(data.products ?? []);

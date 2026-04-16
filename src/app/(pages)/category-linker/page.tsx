@@ -57,7 +57,7 @@ export default function CategoryLinkerPage() {
   const fetchEpos = async () => {
     setLoadingEpos(true);
     try {
-      const res = await fetch('/api/epos/categories');
+      const res = await fetch(`/api/epos/categories?store_id=${selectedStoreId}`);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setEposCategories(data.categories ?? []);
