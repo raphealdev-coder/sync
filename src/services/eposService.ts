@@ -290,6 +290,7 @@ export async function subscribeEposWebhook(eventType: number, uri: string, store
     const res = await client.post<EposWebhook[]>('/api/v4/Webhook', [{
       EventTypeId: eventType,
       Uri: uri,
+      RoutePath: uri,
       ContentType: 'application/json',
     }]);
     return Array.isArray(res.data) ? res.data[0] : res.data;
