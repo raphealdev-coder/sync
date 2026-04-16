@@ -285,20 +285,33 @@ export async function getEposWebhooks(storeId?: number): Promise<EposWebhook[]> 
 
 export async function subscribeEposWebhook(eventType: number, uri: string, storeId?: number): Promise<EposWebhook> {
   const client = await buildClient(storeId);
+  const urlObj = new URL(uri);
+  const routePath = urlObj.pathname + urlObj.search;
   try {
-    // ePOS Now expects an array of webhook triggers
+    // ePOS Now expects an array of webhook triggers with RoutePath as just the path
     const res = await client.post<EposWebhook[]>('/api/v4/Webhook', [{
       EventTypeId: eventType,
       Uri: uri,
-      RoutePath: uri,
+      RoutePath: routePath,
       ContentType: 'application/json',
     }]);
     return Array.isArray(res.data) ? res.data[0] : res.data;
-  } catch (err: unknown) {
-    // Extract detailed error from ePOS Now response
-    const axErr = err as { response?: { data?: unknown; status?: number } };
-    const detail = axErr.response?.data ? JSON.stringify(axErr.response.data) : '';
-    throw new Error(`ePOS webhook subscribe failed (${axErr.response?.status}): ${detail}`);
+  } catch (firstErr: unknown) {
+    // If that fails, try v2 endpoint with different structure
+    try {
+      const res = await client.post<EposWebhook>('/api/v2/WebHookTrigger', {
+        EventTypeId: eventType,
+        Uri: uri,
+        RoutePath: routePath,
+        ContentType: 'application/json',
+      });
+      return res.data;
+    } catch (secondErr: unknown) {
+      // Return details from first attempt
+      const axErr = firstErr as { response?: { data?: unknown; status?: number } };
+      const detail = axErr.response?.data ? JSON.stringify(axErr.response.data) : '';
+      throw new Error(`ePOS webhook subscribe failed (${axErr.response?.status}): ${detail}`);
+    }
   }
 }
 
