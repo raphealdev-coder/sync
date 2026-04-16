@@ -288,7 +288,7 @@ export async function subscribeEposWebhook(eventType: number, uri: string, store
   try {
     // ePOS Now expects an array of webhook triggers
     const res = await client.post<EposWebhook[]>('/api/v4/Webhook', [{
-      EventType: eventType,
+      EventTypeId: eventType,
       Uri: uri,
       ContentType: 'application/json',
     }]);
