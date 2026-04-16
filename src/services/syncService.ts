@@ -30,9 +30,9 @@ import {
   batchUpdateWooProducts,
   getWooOrders,
   getWooOrdersByStatus,
-  bulkUpdateBmlsStock,
+  bulkUpdateSlmsStock,
 } from './wooService';
-import type { WooProduct, WooOrder, BmlsStockItem } from './wooService';
+import type { WooProduct, WooOrder, SlmsStockItem } from './wooService';
 
 export interface SyncResult {
   created: number;
@@ -169,7 +169,7 @@ export async function syncProductsEposToWoo(storeId: number): Promise<SyncResult
 /**
  * Sync inventory/stock levels FROM ePOS Now TO a specific WooCommerce store.
  * Supports location filtering, per-product ignore_stock_update flag,
- * and BMLS per-location stock when bmls_location_id is configured.
+ * and SLMS per-store stock when slms_store_slug is configured.
  */
 export async function syncInventoryEposToWoo(storeId: number): Promise<SyncResult> {
   const result: SyncResult = { created: 0, updated: 0, skipped: 0, errors: 0 };
@@ -189,7 +189,7 @@ export async function syncInventoryEposToWoo(storeId: number): Promise<SyncResul
       ? locationSetting.split(',').map((id) => Number(id.trim())).filter(Boolean)
       : [];
 
-    const bmlsLocationId = store?.bmls_location_id ? Number(store.bmls_location_id) : null;
+    const slmsStoreSlug = store?.slms_store_slug || null;
 
     const stockByProductId = new Map<string, number>();
     for (const s of stocks) {
@@ -201,37 +201,37 @@ export async function syncInventoryEposToWoo(storeId: number): Promise<SyncResul
       stockByProductId.set(key, current + (s.CurrentStock ?? 0));
     }
 
-    // If BMLS is configured, use per-location stock API instead of WooCommerce standard stock
-    if (bmlsLocationId) {
-      const bmlsItems: BmlsStockItem[] = [];
+    // If SLMS store slug is configured, use per-store stock API instead of WooCommerce standard stock
+    if (slmsStoreSlug) {
+      const slmsItems: SlmsStockItem[] = [];
 
       for (const [eposId, qty] of stockByProductId.entries()) {
         const mapping = mappingByEposId.get(eposId);
         if (!mapping) { result.skipped++; continue; }
         if (mapping.ignore_stock_update) { result.skipped++; continue; }
 
-        bmlsItems.push({
+        slmsItems.push({
           product_id: mapping.woo_id,
-          location_id: bmlsLocationId,
+          store: slmsStoreSlug,
           quantity: qty,
         });
       }
 
-      if (bmlsItems.length > 0) {
-        // BMLS bulk update in batches of 50
-        for (let i = 0; i < bmlsItems.length; i += 50) {
-          await bulkUpdateBmlsStock(storeId, bmlsItems.slice(i, i + 50));
+      if (slmsItems.length > 0) {
+        // SLMS bulk update in batches of 50
+        for (let i = 0; i < slmsItems.length; i += 50) {
+          await bulkUpdateSlmsStock(storeId, slmsItems.slice(i, i + 50));
         }
-        result.updated = bmlsItems.length;
+        result.updated = slmsItems.length;
       }
 
       await addLog(
         'inventory-sync',
         'success',
-        `Inventory synced via BMLS (ePOS → Woo store #${storeId}, BMLS location #${bmlsLocationId}): updated=${result.updated}, skipped=${result.skipped}`
+        `Inventory synced via SLMS (ePOS → Woo store #${storeId}, SLMS store "${slmsStoreSlug}"): updated=${result.updated}, skipped=${result.skipped}`
       );
     } else {
-      // Standard WooCommerce stock update (no BMLS)
+      // Standard WooCommerce stock update (no SLMS)
       const updates: ({ id: number } & Partial<WooProduct>)[] = [];
 
       for (const [eposId, qty] of stockByProductId.entries()) {

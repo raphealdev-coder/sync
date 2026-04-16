@@ -223,37 +223,33 @@ export async function getWooCustomers(storeId: number): Promise<WooCustomer[]> {
   return getAllPages<WooCustomer>(storeId, 'customers');
 }
 
-/* ---------- BMLS (Better Multi Location Stock) Integration ---------- */
+/* ---------- SLMS (SterlingLams Multi-Store Pro) Integration ---------- */
 
-export interface BmlsLocation {
-  id: number;
+export interface SlmsStore {
+  slug: string;
   name: string;
-  address?: string;
   city?: string;
-  state?: string;
-  country?: string;
-  is_active: boolean;
+  enabled: boolean;
 }
 
-export interface BmlsStockItem {
+export interface SlmsStockItem {
   product_id: number;
-  location_id: number;
+  store: string;   // store slug e.g. "allen"
   quantity: number;
-  variation_id?: number;
 }
 
 /**
- * Build an Axios-compatible client for the BMLS REST API.
+ * Build an Axios-compatible client for the SLMS REST API.
  * Uses the same WooCommerce credentials (consumer_key/secret as Basic auth).
  */
-async function buildBmlsClient(storeId: number) {
+async function buildSlmsClient(storeId: number) {
   const store = await getWooStore(storeId);
   if (!store) throw new Error(`WooCommerce store #${storeId} not found`);
 
   const { default: axios } = require('axios') as typeof import('axios');
   const baseURL = store.site_url.replace(/\/+$/, '');
   return axios.create({
-    baseURL: `${baseURL}/wp-json/bmls/v1`,
+    baseURL: `${baseURL}/wp-json/slms/v1`,
     auth: {
       username: store.consumer_key,
       password: store.consumer_secret,
@@ -263,42 +259,40 @@ async function buildBmlsClient(storeId: number) {
 }
 
 /**
- * Get all BMLS locations from the WooCommerce site.
+ * Get all SLMS stores from the WooCommerce site.
  */
-export async function getBmlsLocations(storeId: number): Promise<BmlsLocation[]> {
-  const client = await buildBmlsClient(storeId);
-  const res = await client.get('/locations');
-  return res.data as BmlsLocation[];
+export async function getSlmsStores(storeId: number): Promise<SlmsStore[]> {
+  const client = await buildSlmsClient(storeId);
+  const res = await client.get('/stores');
+  return (res.data as { stores: SlmsStore[] }).stores;
 }
 
 /**
- * Update stock for a single product at a specific BMLS location.
+ * Update stock for a single product at a specific SLMS store location.
  */
-export async function updateBmlsStock(
+export async function updateSlmsStock(
   storeId: number,
   productId: number,
-  locationId: number,
-  quantity: number,
-  variationId = 0
+  storeSlug: string,
+  quantity: number
 ): Promise<void> {
-  const client = await buildBmlsClient(storeId);
+  const client = await buildSlmsClient(storeId);
   await client.post('/stock/update', {
     product_id: productId,
-    location_id: locationId,
+    store: storeSlug,
     quantity,
-    variation_id: variationId,
   });
 }
 
 /**
- * Bulk update stock across BMLS locations.
- * items: Array of { product_id, location_id, quantity, variation_id? }
+ * Bulk update stock across SLMS store locations.
+ * items: Array of { product_id, store, quantity }
  */
-export async function bulkUpdateBmlsStock(
+export async function bulkUpdateSlmsStock(
   storeId: number,
-  items: BmlsStockItem[]
-): Promise<{ results: Array<{ product_id: number; location_id: number; success: boolean; error?: string }> }> {
-  const client = await buildBmlsClient(storeId);
+  items: SlmsStockItem[]
+): Promise<{ updated: number; failed: number; results: Array<{ product_id: number; store: string; success: boolean; error?: string }> }> {
+  const client = await buildSlmsClient(storeId);
   const res = await client.post('/stock/bulk', { items });
   return res.data;
 }

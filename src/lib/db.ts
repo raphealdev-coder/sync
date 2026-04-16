@@ -32,8 +32,15 @@ export async function ensureMigrated(): Promise<void> {
       epos_app_id     TEXT,
       epos_app_secret TEXT,
       epos_location_id TEXT,
-      bmls_location_id TEXT
+      slms_store_slug TEXT
     )`;
+
+  // Migration: rename bmls_location_id → slms_store_slug for existing databases
+  await sql`DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='woo_stores' AND column_name='bmls_location_id') THEN
+      ALTER TABLE woo_stores RENAME COLUMN bmls_location_id TO slms_store_slug;
+    END IF;
+  END $$`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS product_mappings (
@@ -175,7 +182,7 @@ export interface WooStore {
   epos_app_id: string | null;
   epos_app_secret: string | null;
   epos_location_id: string | null;
-  bmls_location_id: string | null;
+  slms_store_slug: string | null;
 }
 
 export async function getWooStores(): Promise<WooStore[]> {
@@ -193,27 +200,27 @@ export async function getWooStore(id: number): Promise<WooStore | undefined> {
 
 export async function createWooStore(
   name: string, siteUrl: string, consumerKey: string, consumerSecret: string,
-  eposAppId?: string, eposAppSecret?: string, eposLocationId?: string, bmlsLocationId?: string
+  eposAppId?: string, eposAppSecret?: string, eposLocationId?: string, slmsStoreSlug?: string
 ): Promise<WooStore> {
   await ensureMigrated();
   const sql = getSQL();
   const rows = await sql`
-    INSERT INTO woo_stores (name, site_url, consumer_key, consumer_secret, epos_app_id, epos_app_secret, epos_location_id, bmls_location_id)
-    VALUES (${name}, ${siteUrl}, ${consumerKey}, ${consumerSecret}, ${eposAppId ?? null}, ${eposAppSecret ?? null}, ${eposLocationId ?? null}, ${bmlsLocationId ?? null})
+    INSERT INTO woo_stores (name, site_url, consumer_key, consumer_secret, epos_app_id, epos_app_secret, epos_location_id, slms_store_slug)
+    VALUES (${name}, ${siteUrl}, ${consumerKey}, ${consumerSecret}, ${eposAppId ?? null}, ${eposAppSecret ?? null}, ${eposLocationId ?? null}, ${slmsStoreSlug ?? null})
     RETURNING *`;
   return rows[0] as WooStore;
 }
 
 export async function updateWooStore(
   id: number, name: string, siteUrl: string, consumerKey: string, consumerSecret: string,
-  eposAppId?: string, eposAppSecret?: string, eposLocationId?: string, bmlsLocationId?: string
+  eposAppId?: string, eposAppSecret?: string, eposLocationId?: string, slmsStoreSlug?: string
 ): Promise<void> {
   await ensureMigrated();
   const sql = getSQL();
   await sql`
     UPDATE woo_stores SET name = ${name}, site_url = ${siteUrl}, consumer_key = ${consumerKey}, consumer_secret = ${consumerSecret},
     epos_app_id = ${eposAppId ?? null}, epos_app_secret = ${eposAppSecret ?? null},
-    epos_location_id = ${eposLocationId ?? null}, bmls_location_id = ${bmlsLocationId ?? null}
+    epos_location_id = ${eposLocationId ?? null}, slms_store_slug = ${slmsStoreSlug ?? null}
     WHERE id = ${id}`;
 }
 

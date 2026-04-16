@@ -11,7 +11,7 @@ export async function GET() {
     epos_app_id: s.epos_app_id ?? '',
     epos_app_secret: s.epos_app_secret ? '••••••••' + s.epos_app_secret.slice(-4) : '',
     epos_location_id: s.epos_location_id ?? '',
-    bmls_location_id: s.bmls_location_id ?? '',
+    slms_store_slug: s.slms_store_slug ?? '',
   }));
   return NextResponse.json({ stores: masked });
 }
@@ -19,7 +19,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { id, name, site_url, consumer_key, consumer_secret, epos_app_id, epos_app_secret, epos_location_id, bmls_location_id } = body;
+    const { id, name, site_url, consumer_key, consumer_secret, epos_app_id, epos_app_secret, epos_location_id, slms_store_slug } = body;
 
     if (!name || !site_url || !consumer_key || !consumer_secret) {
       return NextResponse.json(
@@ -41,8 +41,8 @@ export async function POST(req: NextRequest) {
         ? String(epos_app_secret).trim()
         : existing.epos_app_secret ?? undefined;
       const finalEposLocation = epos_location_id !== undefined ? String(epos_location_id).trim() || undefined : existing.epos_location_id ?? undefined;
-      const finalBmlsLocation = bmls_location_id !== undefined ? String(bmls_location_id).trim() || undefined : existing.bmls_location_id ?? undefined;
-      await updateWooStore(Number(id), String(name).trim(), String(site_url).trim(), finalKey, finalSecret, finalEposId, finalEposSecret, finalEposLocation, finalBmlsLocation);
+      const finalSlmsStoreSlug = slms_store_slug !== undefined ? String(slms_store_slug).trim() || undefined : existing.slms_store_slug ?? undefined;
+      await updateWooStore(Number(id), String(name).trim(), String(site_url).trim(), finalKey, finalSecret, finalEposId, finalEposSecret, finalEposLocation, finalSlmsStoreSlug);
       return NextResponse.json({ success: true });
     } else {
       // Create new store
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
         epos_app_id ? String(epos_app_id).trim() : undefined,
         epos_app_secret ? String(epos_app_secret).trim() : undefined,
         epos_location_id ? String(epos_location_id).trim() : undefined,
-        bmls_location_id ? String(bmls_location_id).trim() : undefined
+        slms_store_slug ? String(slms_store_slug).trim() : undefined
       );
       return NextResponse.json({
         success: true,

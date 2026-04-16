@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { addLog, getProductMappings, getWooStore } from '@/lib/db';
 import { getEposProduct, getEposProductStocks } from '@/services/eposService';
-import { updateWooProduct, batchUpdateWooProducts, updateBmlsStock, bulkUpdateBmlsStock } from '@/services/wooService';
-import type { BmlsStockItem } from '@/services/wooService';
+import { updateWooProduct, batchUpdateWooProducts, updateSlmsStock, bulkUpdateSlmsStock } from '@/services/wooService';
+import type { SlmsStockItem } from '@/services/wooService';
 
 /**
  * Incoming webhook handler for ePOS Now events.
@@ -93,12 +93,12 @@ async function handleStockUpdate(storeId: number, body: unknown) {
       totalStock += s.CurrentStock ?? 0;
     }
 
-    const bmlsLocationId = store?.bmls_location_id ? Number(store.bmls_location_id) : null;
+    const slmsStoreSlug = store?.slms_store_slug || null;
 
-    if (bmlsLocationId) {
-      // Use BMLS per-location stock update
-      await updateBmlsStock(storeId, mapping.woo_id, bmlsLocationId, totalStock);
-      await addLog('webhook', 'success', `BMLS stock updated via webhook: ePOS #${productId} → Woo #${mapping.woo_id} @ BMLS location #${bmlsLocationId} = ${totalStock}`);
+    if (slmsStoreSlug) {
+      // Use SLMS per-store stock update
+      await updateSlmsStock(storeId, mapping.woo_id, slmsStoreSlug, totalStock);
+      await addLog('webhook', 'success', `SLMS stock updated via webhook: ePOS #${productId} → Woo #${mapping.woo_id} @ store "${slmsStoreSlug}" = ${totalStock}`);
     } else {
       // Standard WooCommerce stock update
       await batchUpdateWooProducts(storeId, [
@@ -173,24 +173,24 @@ async function handleTransactionComplete(storeId: number, _body: unknown) {
       stockByProductId.set(key, (stockByProductId.get(key) ?? 0) + (s.CurrentStock ?? 0));
     }
 
-    const bmlsLocationId = store?.bmls_location_id ? Number(store.bmls_location_id) : null;
+    const slmsStoreSlug = store?.slms_store_slug || null;
 
-    if (bmlsLocationId) {
-      // BMLS per-location stock bulk update
-      const bmlsItems: BmlsStockItem[] = [];
+    if (slmsStoreSlug) {
+      // SLMS per-store stock bulk update
+      const slmsItems: SlmsStockItem[] = [];
       for (const mapping of mappings) {
         if (mapping.ignore_stock_update) continue;
         const qty = stockByProductId.get(mapping.epos_id);
         if (qty !== undefined) {
-          bmlsItems.push({ product_id: mapping.woo_id, location_id: bmlsLocationId, quantity: qty });
+          slmsItems.push({ product_id: mapping.woo_id, store: slmsStoreSlug, quantity: qty });
         }
       }
-      if (bmlsItems.length > 0) {
-        for (let i = 0; i < bmlsItems.length; i += 50) {
-          await bulkUpdateBmlsStock(storeId, bmlsItems.slice(i, i + 50));
+      if (slmsItems.length > 0) {
+        for (let i = 0; i < slmsItems.length; i += 50) {
+          await bulkUpdateSlmsStock(storeId, slmsItems.slice(i, i + 50));
         }
       }
-      await addLog('webhook', 'success', `Transaction webhook: refreshed ${bmlsItems.length} BMLS stock levels for store #${storeId}`);
+      await addLog('webhook', 'success', `Transaction webhook: refreshed ${slmsItems.length} SLMS stock levels for store #${storeId}`);
     } else {
       // Standard WooCommerce stock update
       const updates: ({ id: number } & Record<string, unknown>)[] = [];

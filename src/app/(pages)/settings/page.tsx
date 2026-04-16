@@ -24,7 +24,7 @@ interface WooStoreData {
   epos_app_id: string;
   epos_app_secret: string;
   epos_location_id: string;
-  bmls_location_id: string;
+  slms_store_slug: string;
 }
 
 interface TestResult {
@@ -288,14 +288,14 @@ function StoreForm({
         Go to your ePOS Now back office → Apps → API → find the API device for this location and copy its credentials.
       </div>
 
-      {/* BMLS Multi-Location Stock */}
-      <h4 className="text-xs font-semibold text-green-600 uppercase tracking-wide mb-3">BMLS Multi-Location Stock</h4>
+      {/* SLMS Multi-Store Pro */}
+      <h4 className="text-xs font-semibold text-green-600 uppercase tracking-wide mb-3">Multi-Store Stock (SLMS)</h4>
       <div className="space-y-4 mb-4">
-        <InputField label="BMLS Location ID" name="bmls_location_id" value={data.bmls_location_id ?? ''} onChange={handleChange} placeholder="e.g. 1 (from WP Admin → Stock Locations)" />
+        <InputField label="SLMS Store Slug" name="slms_store_slug" value={data.slms_store_slug ?? ''} onChange={handleChange} placeholder="e.g. allen (from WP Admin → Multi-Store → Stores)" />
       </div>
       <div className="p-3 bg-green-50 rounded-lg text-xs text-green-700 mb-4">
-        <strong>Multi-Location Stock:</strong> If you use the Better Multi Location Stock plugin, enter the location ID for this store.
-        When set, stock syncs will update per-location quantities instead of the main WooCommerce stock.
+        <strong>Multi-Store Stock:</strong> If you use the SterlingLams Multi-Store Pro plugin, enter the store slug for this location.
+        When set, stock syncs will update per-store quantities instead of the main WooCommerce stock.
         Leave blank to use standard WooCommerce stock management.
       </div>
 
@@ -445,7 +445,7 @@ export default function SettingsPage() {
 
         {showAddStore && (
           <StoreForm
-            store={{ name: '', site_url: '', consumer_key: '', consumer_secret: '', epos_app_id: '', epos_app_secret: '', epos_location_id: '', bmls_location_id: '' }}
+            store={{ name: '', site_url: '', consumer_key: '', consumer_secret: '', epos_app_id: '', epos_app_secret: '', epos_location_id: '', slms_store_slug: '' }}
             onSave={handleSaveStore}
             onCancel={() => setShowAddStore(false)}
             isNew
