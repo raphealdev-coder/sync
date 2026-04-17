@@ -62,11 +62,20 @@ export async function POST(req: NextRequest) {
     const storeId = Number(store_id);
     const results: { event: string; success: boolean; error?: string }[] = [];
 
-    // First set the BaseUri on the device so RoutePath-based webhooks resolve correctly
+    // Diagnostic: fetch existing webhooks to see the current state and field names
+    let existingWebhooks: unknown = null;
     try {
-      await updateEposWebhookBaseUrl(base_url, storeId);
+      existingWebhooks = await getEposWebhooks(storeId);
     } catch (err) {
-      // Non-fatal: v2 fallback uses full Uri anyway
+      existingWebhooks = `GET failed: ${String(err)}`;
+    }
+
+    // First set the BaseUri on the device so RoutePath-based webhooks resolve correctly
+    let baseUriResult = '';
+    try {
+      baseUriResult = await updateEposWebhookBaseUrl(base_url, storeId);
+    } catch (err) {
+      baseUriResult = String(err);
       results.push({ event: '_setBaseUri', success: false, error: String(err) });
     }
 
@@ -87,7 +96,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, results });
+    return NextResponse.json({ success: true, results, baseUriResult, existingWebhooks });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

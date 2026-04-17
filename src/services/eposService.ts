@@ -289,8 +289,10 @@ export async function subscribeEposWebhook(eventType: number, uri: string, store
   const client = await buildClient(storeId);
   const urlObj = new URL(uri);
   const routePath = urlObj.pathname + urlObj.search;
+  const errors: string[] = [];
+  const trunc = (d: unknown) => JSON.stringify(d ?? '').slice(0, 200);
 
-  // Try v4 with full Uri + RoutePath — ePOS Now populates RoutePath from Uri
+  // Attempt 1: array with EventTypeId + Uri (full) + RoutePath
   try {
     const res = await client.post<EposWebhook[]>('/api/v4/Webhook', [{
       EventTypeId: eventType,
@@ -298,26 +300,48 @@ export async function subscribeEposWebhook(eventType: number, uri: string, store
       RoutePath: routePath,
     }]);
     return Array.isArray(res.data) ? res.data[0] : res.data;
-  } catch (v4ArrErr: unknown) {
-    const v4ArrAx = v4ArrErr as { response?: { data?: unknown; status?: number } };
-    const v4ArrDetail = v4ArrAx.response?.data ? JSON.stringify(v4ArrAx.response.data) : '';
-
-    // Retry v4 as single object (not array)
-    try {
-      const res = await client.post<EposWebhook>('/api/v4/Webhook', {
-        EventTypeId: eventType,
-        Uri: uri,
-        RoutePath: routePath,
-      });
-      return res.data;
-    } catch (v4ObjErr: unknown) {
-      const v4ObjAx = v4ObjErr as { response?: { data?: unknown; status?: number } };
-      const v4ObjDetail = v4ObjAx.response?.data ? JSON.stringify(v4ObjAx.response.data) : '';
-      throw new Error(
-        `ePOS webhook subscribe failed — v4[array]: (${v4ArrAx.response?.status}) ${v4ArrDetail} | v4{object}: (${v4ObjAx.response?.status}) ${v4ObjDetail}`
-      );
-    }
+  } catch (e: unknown) {
+    const ax = e as { response?: { data?: unknown; status?: number } };
+    errors.push(`A1[Uri+RoutePath]: ${ax.response?.status} ${trunc(ax.response?.data)}`);
   }
+
+  // Attempt 2: array with just Uri (full URL) — no RoutePath field
+  try {
+    const res = await client.post<EposWebhook[]>('/api/v4/Webhook', [{
+      EventTypeId: eventType,
+      Uri: uri,
+    }]);
+    return Array.isArray(res.data) ? res.data[0] : res.data;
+  } catch (e: unknown) {
+    const ax = e as { response?: { data?: unknown; status?: number } };
+    errors.push(`A2[Uri only]: ${ax.response?.status} ${trunc(ax.response?.data)}`);
+  }
+
+  // Attempt 3: array with Url property instead of Uri
+  try {
+    const res = await client.post<EposWebhook[]>('/api/v4/Webhook', [{
+      EventTypeId: eventType,
+      Url: uri,
+    }]);
+    return Array.isArray(res.data) ? res.data[0] : res.data;
+  } catch (e: unknown) {
+    const ax = e as { response?: { data?: unknown; status?: number } };
+    errors.push(`A3[Url]: ${ax.response?.status} ${trunc(ax.response?.data)}`);
+  }
+
+  // Attempt 4: array with CallbackUrl
+  try {
+    const res = await client.post<EposWebhook[]>('/api/v4/Webhook', [{
+      EventTypeId: eventType,
+      CallbackUrl: uri,
+    }]);
+    return Array.isArray(res.data) ? res.data[0] : res.data;
+  } catch (e: unknown) {
+    const ax = e as { response?: { data?: unknown; status?: number } };
+    errors.push(`A4[CallbackUrl]: ${ax.response?.status} ${trunc(ax.response?.data)}`);
+  }
+
+  throw new Error(errors.join(' | '));
 }
 
 export async function unsubscribeEposWebhook(webhookId: number, storeId?: number): Promise<void> {
@@ -325,15 +349,59 @@ export async function unsubscribeEposWebhook(webhookId: number, storeId?: number
   await client.delete(`/api/v4/Webhook/${webhookId}`);
 }
 
-export async function updateEposWebhookBaseUrl(baseUrl: string, storeId?: number): Promise<void> {
+export async function updateEposWebhookBaseUrl(baseUrl: string, storeId?: number): Promise<string> {
   const client = await buildClient(storeId);
-  // Try PATCH with BaseUri on the webhook endpoint; some accounts need PUT
+  const errors: string[] = [];
+  const trunc = (d: unknown) => JSON.stringify(d ?? '').slice(0, 200);
+
+  // Attempt 1: PUT /api/v4/Webhook/BaseUri with JSON string body
   try {
     await client.put('/api/v4/Webhook/BaseUri', JSON.stringify(baseUrl), {
       headers: { 'Content-Type': 'application/json' },
     });
-  } catch {
-    // Fallback: try PATCH with object body
-    await client.patch('/api/v4/Webhook', { BaseUri: baseUrl });
+    return 'PUT BaseUri (string)';
+  } catch (e: unknown) {
+    const ax = e as { response?: { data?: unknown; status?: number } };
+    errors.push(`PUT(string) ${ax.response?.status}: ${trunc(ax.response?.data)}`);
   }
+
+  // Attempt 2: PUT /api/v4/Webhook/BaseUri with object body
+  try {
+    await client.put('/api/v4/Webhook/BaseUri', { BaseUri: baseUrl });
+    return 'PUT BaseUri (object)';
+  } catch (e: unknown) {
+    const ax = e as { response?: { data?: unknown; status?: number } };
+    errors.push(`PUT(obj) ${ax.response?.status}: ${trunc(ax.response?.data)}`);
+  }
+
+  // Attempt 3: POST /api/v4/Webhook/BaseUri
+  try {
+    await client.post('/api/v4/Webhook/BaseUri', JSON.stringify(baseUrl), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return 'POST BaseUri';
+  } catch (e: unknown) {
+    const ax = e as { response?: { data?: unknown; status?: number } };
+    errors.push(`POST ${ax.response?.status}: ${trunc(ax.response?.data)}`);
+  }
+
+  // Attempt 4: PATCH /api/v4/Webhook with object
+  try {
+    await client.patch('/api/v4/Webhook', { BaseUri: baseUrl });
+    return 'PATCH Webhook (object)';
+  } catch (e: unknown) {
+    const ax = e as { response?: { data?: unknown; status?: number } };
+    errors.push(`PATCH(obj) ${ax.response?.status}: ${trunc(ax.response?.data)}`);
+  }
+
+  // Attempt 5: PATCH /api/v4/Webhook with array
+  try {
+    await client.patch('/api/v4/Webhook', [{ BaseUri: baseUrl }]);
+    return 'PATCH Webhook (array)';
+  } catch (e: unknown) {
+    const ax = e as { response?: { data?: unknown; status?: number } };
+    errors.push(`PATCH(arr) ${ax.response?.status}: ${trunc(ax.response?.data)}`);
+  }
+
+  throw new Error(`BaseUri: ${errors.join(' | ')}`);
 }

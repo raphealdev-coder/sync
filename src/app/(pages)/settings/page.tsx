@@ -203,7 +203,9 @@ function StoreForm({
         const fail = result.results?.filter((r: { success: boolean }) => !r.success).length ?? 0;
         const errors = result.results?.filter((r: { success: boolean; error?: string }) => !r.success)
           .map((r: { event: string; error?: string }) => `${r.event}: ${r.error}`).join('\n') ?? '';
-        setWebhookStatus(`Webhooks registered: ${ok} success, ${fail} failed${errors ? '\n' + errors : ''}`);
+        const diag = result.existingWebhooks ? `\nExisting webhooks: ${JSON.stringify(result.existingWebhooks)}` : '';
+        const baseUri = result.baseUriResult ? `\nBaseUri: ${result.baseUriResult}` : '';
+        setWebhookStatus(`Webhooks registered: ${ok} success, ${fail} failed${baseUri}${errors ? '\n' + errors : ''}${diag}`);
       }
     } catch (err) {
       setWebhookStatus(`Error: ${err}`);
