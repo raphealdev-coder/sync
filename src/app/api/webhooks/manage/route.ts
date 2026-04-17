@@ -3,6 +3,7 @@ import {
   getEposWebhooks,
   subscribeEposWebhook,
   unsubscribeEposWebhook,
+  updateEposWebhookBaseUrl,
 } from '@/services/eposService';
 import {
   getWebhookSubscriptions,
@@ -60,6 +61,14 @@ export async function POST(req: NextRequest) {
 
     const storeId = Number(store_id);
     const results: { event: string; success: boolean; error?: string }[] = [];
+
+    // First set the BaseUri on the device so RoutePath-based webhooks resolve correctly
+    try {
+      await updateEposWebhookBaseUrl(base_url, storeId);
+    } catch (err) {
+      // Non-fatal: v2 fallback uses full Uri anyway
+      results.push({ event: '_setBaseUri', success: false, error: String(err) });
+    }
 
     for (const event of WEBHOOK_EVENTS) {
       const webhookUrl = `${base_url}/api/webhooks/epos?store_id=${storeId}&event=${event.type}`;

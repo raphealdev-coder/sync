@@ -289,30 +289,32 @@ export async function subscribeEposWebhook(eventType: number, uri: string, store
   const client = await buildClient(storeId);
   const urlObj = new URL(uri);
   const routePath = urlObj.pathname + urlObj.search;
+
+  // Try v4 first — only EventTypeId + RoutePath (BaseUri must be set beforehand)
   try {
-    // ePOS Now expects an array of webhook triggers with RoutePath as just the path
     const res = await client.post<EposWebhook[]>('/api/v4/Webhook', [{
       EventTypeId: eventType,
-      Uri: uri,
       RoutePath: routePath,
-      ContentType: 'application/json',
     }]);
     return Array.isArray(res.data) ? res.data[0] : res.data;
-  } catch (firstErr: unknown) {
-    // If that fails, try v2 endpoint with different structure
+  } catch (v4Err: unknown) {
+    const v4Ax = v4Err as { response?: { data?: unknown; status?: number } };
+    const v4Detail = v4Ax.response?.data ? JSON.stringify(v4Ax.response.data) : '';
+    console.error(`Webhook v4 failed (${v4Ax.response?.status}): ${v4Detail}`);
+
+    // Fallback: try v2 with full Uri
     try {
       const res = await client.post<EposWebhook>('/api/v2/WebHookTrigger', {
         EventTypeId: eventType,
         Uri: uri,
-        RoutePath: routePath,
-        ContentType: 'application/json',
       });
       return res.data;
-    } catch (secondErr: unknown) {
-      // Return details from first attempt
-      const axErr = firstErr as { response?: { data?: unknown; status?: number } };
-      const detail = axErr.response?.data ? JSON.stringify(axErr.response.data) : '';
-      throw new Error(`ePOS webhook subscribe failed (${axErr.response?.status}): ${detail}`);
+    } catch (v2Err: unknown) {
+      const v2Ax = v2Err as { response?: { data?: unknown; status?: number } };
+      const v2Detail = v2Ax.response?.data ? JSON.stringify(v2Ax.response.data) : '';
+      throw new Error(
+        `ePOS webhook subscribe failed — v4: (${v4Ax.response?.status}) ${v4Detail} | v2: (${v2Ax.response?.status}) ${v2Detail}`
+      );
     }
   }
 }

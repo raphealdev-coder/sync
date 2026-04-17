@@ -5,6 +5,14 @@ import { updateWooProduct, batchUpdateWooProducts, updateSlmsStock, bulkUpdateSl
 import type { SlmsStockItem } from '@/services/wooService';
 
 /**
+ * GET handler — ePOS Now may validate webhook URLs with a GET request.
+ * Return 200 so the URL passes validation.
+ */
+export async function GET() {
+  return NextResponse.json({ status: 'ok' });
+}
+
+/**
  * Incoming webhook handler for ePOS Now events.
  * ePOS Now sends POST requests here when products/stock change.
  * URL format: /api/webhooks/epos?store_id=X&event=Y
