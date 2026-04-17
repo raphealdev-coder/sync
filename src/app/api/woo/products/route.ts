@@ -19,6 +19,8 @@ export async function GET(req: NextRequest) {
       stockStatus: p.stock_status ?? '',
       type: p.type ?? 'simple',
       status: p.status ?? '',
+      manageStock: p.manage_stock ?? false,
+      parentId: p.parent_id ?? 0,
     }));
     return NextResponse.json({ products: cleaned });
   } catch (err) {

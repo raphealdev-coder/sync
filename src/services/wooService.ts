@@ -14,6 +14,7 @@ export interface WooProduct {
   manage_stock?: boolean;
   stock_quantity?: number | null;
   stock_status?: string;
+  parent_id?: number;
   categories?: { id: number; name?: string }[];
   meta_data?: { key: string; value: string }[];
 }

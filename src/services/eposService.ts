@@ -29,8 +29,10 @@ export interface EposProduct {
   CostPrice?: number;
   Barcode?: string;
   CategoryId?: number;
+  CategoryName?: string;
   TaxRateId?: number;
   IsDeleted?: boolean;
+  Archived?: boolean;
 }
 
 export interface EposProductStock {

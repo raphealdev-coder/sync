@@ -16,6 +16,8 @@ export async function GET(req: NextRequest) {
         costPrice: p.CostPrice ?? 0,
         barcode: p.Barcode ?? '',
         categoryId: p.CategoryId ?? null,
+        categoryName: p.CategoryName ?? '',
+        archived: p.Archived ?? false,
       }));
     return NextResponse.json({ products: cleaned });
   } catch (err) {
